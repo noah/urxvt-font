@@ -1,9 +1,6 @@
 h2. About
 
-urxvt is a great terminal emulator, but spending time on a mac made me miss the
-ability (in iTerm!) to dynamically resize text using ⌘+Plus and ⌘+Minus.  I was
-also thinking that it would be be nice if resizing the terminal font could be
-persisted to @Xresources@.  Turns out this was pretty easy to accomplish.
+urxvt is a great terminal emulator, but spending time on a mac made me miss the ability (in iTerm!) to dynamically resize text using ⌘+Plus and ⌘+Minus.  I was also thinking that it would be be nice if resizing the terminal font could be persisted to @Xresources@.  Turns out this was pretty easy to accomplish.
 
 bc. urxvt.perl-lib:                     /path/to/urxvt-font
 urxvt.keysym.Control-Shift-Up:      perl:font:increment
