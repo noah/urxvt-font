@@ -1,0 +1,14 @@
+h2. About
+
+urxvt is a great terminal emulator, but spending time on a mac made me miss the
+ability (in iTerm!) to dynamically resize text using ⌘+Plus and ⌘+Minus.  I was
+also thinking that it would be be nice if resizing the terminal font could be
+persisted to @Xresources@.  Turns out this was pretty easy to accomplish.
+
+bc.
+urxvt.perl-lib:                     /path/to/urxvt-font
+urxvt.keysym.Control-Shift-Up:      perl:font:increment
+urxvt.keysym.Control-Shift-Down:    perl:font:decrement
+urxvt.perl-ext-common:              font
+
+Now, @Ctrl+Shift+<Up>@ and @Ctrl+Shift+<Down>@ will, respectively, enlarge and decrease the text size in a running urxvt window, *and* save the new font size to @~/.Xresources@, so that it's there for the next time you open a terminal window.  With the Monaco font, it's a poor man's iTerm.

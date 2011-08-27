@@ -1,0 +1,62 @@
+#!/usr/bin/env perl
+
+use strict;
+
+# On-the-fly urxvt font resizing.  Like ⌘{+,-}, on mac computers
+#
+# Noah K. Tilton <noahktilton@gmail.com>
+#
+# What it does:
+#
+# 1) Emits escape sequences to change the font size in the running console;
+# 2) Persists the changed font size to xresources file.
+#
+# Note: the regexes will only work on xft xrdb entries
+#
+# References: man 3 urxvtperl
+
+use constant X_RESOURCES => "~/.Xresources";
+
+sub change_size
+{
+  my ($self, $cmd) = @_;
+
+  my (@pieces)  = split /:/, $self->{term}->resource("font");   # TODO make boldFont work
+  my (@resized) = ();
+
+  foreach my $piece (@pieces)
+  { 
+    if ($piece =~ /pixelsize=(\d*)/)
+    {
+      my $size      = $1;
+      my $new_size  = (($cmd =~ m/font:increment/) ? ($size+1) : ($size-1));
+      $piece =~ s/pixelsize=$size/pixelsize=$new_size/;
+    }
+    push @resized, $piece;
+  } 
+
+  my ($resized_str)   = join (":", @resized);
+  my $UPDATE_STR      = "urxvt\*"      . $case . ":" .  $resized_str . "\n";
+  my $SAVE_STR        = "xrdb -edit " . X_RESOURCES;
+  my $RESIZE_STR      = "\033]50;"    . $resized_str . "\007";
+  my $LOAD_STR        = "xrdb -load " . X_RESOURCES;
+
+  system($LOAD_STR);                                          # load the xrdb db
+  open(XRDB_MERGE, "| xrdb -merge") || die "can't fork: $!";
+  local $SIG{PIPE} = sub { die "xrdb pipe broke" };
+  print XRDB_MERGE $UPDATE_STR;                               # merge the new values
+  close XRDB_MERGE || die "bad xrdb: $! $?";
+  system($SAVE_STR);                                          # write the db values back to the file
+  $self->{term}->cmd_parse($RESIZE_STR);                      # update the urxvt runtime
+}
+
+sub on_user_command
+{
+  # This function is called whenever some urxvt.keysym.*: perl:x:y
+  # mapped in X_RESOURCES is called; where x is this "module" (file,
+  # translation unit...), y is some function in this file (and this
+  # function, if defined), and $cmd is the argument z.
+  #
+  my ($self, $cmd) = @_;
+  if ($cmd =~ /font:..crement/) { $self->change_size($cmd); }
+}
