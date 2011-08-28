@@ -36,18 +36,18 @@ sub change_size
   } 
 
   my ($resized_str)   = join (":", @resized);
-  my $UPDATE_STR      = "urxvt\*"      . $case . ":" .  $resized_str . "\n";
-  my $SAVE_STR        = "xrdb -edit " . X_RESOURCES;
-  my $RESIZE_STR      = "\033]50;"    . $resized_str . "\007";
-  my $LOAD_STR        = "xrdb -load " . X_RESOURCES;
+  my $RESIZE_STR      = "\033]50;"      . $resized_str . "\007";
+  my $LOAD_STR        = "xrdb -load "   . X_RESOURCES;
+  my $UPDATE_STR      = "urxvt\*font:"  . $resized_str;
+  my $SAVE_STR        = "xrdb -edit "   . X_RESOURCES;
 
+  $self->{term}->cmd_parse($RESIZE_STR);                      # update the urxvt runtime
   system($LOAD_STR);                                          # load the xrdb db
   open(XRDB_MERGE, "| xrdb -merge") || die "can't fork: $!";
   local $SIG{PIPE} = sub { die "xrdb pipe broke" };
   print XRDB_MERGE $UPDATE_STR;                               # merge the new values
   close XRDB_MERGE || die "bad xrdb: $! $?";
   system($SAVE_STR);                                          # write the db values back to the file
-  $self->{term}->cmd_parse($RESIZE_STR);                      # update the urxvt runtime
 }
 
 sub on_user_command
