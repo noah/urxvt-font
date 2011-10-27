@@ -14,6 +14,8 @@ use strict;
 # Note: the regexes will only work on xft xrdb entries
 #
 # References: man 3 urxvtperl
+#
+#  Debugging:   urxvt --perl-lib ${HOME}/.urxvt -pe font 
 
 use constant X_RESOURCES => "~/.Xresources";
 
