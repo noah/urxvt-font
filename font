@@ -2,7 +2,8 @@
 
 use strict;
 
-# On-the-fly urxvt font resizing.  Like ⌘{+,-}, on mac computers
+# On-the-fly urxvt font resizing.  Like ⌘{+,-}, on mac computers, just
+# way more complicated.
 #
 # Noah K. Tilton <noahktilton@gmail.com>
 #
@@ -12,44 +13,69 @@ use strict;
 # 2) Persists the changed font size to xresources file.
 #
 # Note: the regexes will only work on xft xrdb entries
+#   For this script to work, ~/.Xdefauls should probably contain at
+#   least the following:
+#
+#       urxvt*font
+#       urxvt*boldFont
+#       urxvt*boldColors: on
 #
 # References: man 3 urxvtperl
 #
 #  Debugging:   urxvt --perl-lib ${HOME}/.urxvt -pe font 
 
+
 use constant X_RESOURCES => "~/.Xresources";
 
-sub change_size
+sub _resize_xft_string
 {
-  my ($self, $cmd) = @_;
-
-  my (@pieces)  = split /:/, $self->{term}->resource("font");   # TODO make boldFont work
-  my (@resized) = ();
-
+  my ($self, $key, $delta)  = @_;
+  my (@pieces)              = split /:/, $self->{term}->resource($key);
+  my (@resized)             = ();
   foreach my $piece (@pieces)
   { 
     if ($piece =~ /pixelsize=(\d*)/)
     {
-      my $size      = $1;
-      my $new_size  = (($cmd =~ m/font:increment/) ? ($size+1) : ($size-1));
-      $piece =~ s/pixelsize=$size/pixelsize=$new_size/;
+      my ($size)        =  $1;
+      my ($new_size)    =  $size + $delta;
+      if ($new_size < 1)
+      {
+        $new_size = 1;
+      }
+      $piece            =~ s/pixelsize=$size/pixelsize=$new_size/;
     }
     push @resized, $piece;
   } 
+  join (":", @resized);
+}
 
-  my ($resized_str)   = join (":", @resized);
-  my $RESIZE_STR      = "\033]50;"      . $resized_str . "\007";
-  my $LOAD_STR        = "xrdb -load "   . X_RESOURCES;
-  my $UPDATE_STR      = "urxvt\*font:"  . $resized_str;
-  my $SAVE_STR        = "xrdb -edit "   . X_RESOURCES;
+sub change_size
+{
+  my ($self, $delta) = @_;
 
-  $self->{term}->cmd_parse($RESIZE_STR);                      # update the urxvt runtime
-  system($LOAD_STR);                                          # load the xrdb db
+  # Get xft strings with font size {+/-}1
+  my ($font_resized)        = $self->_resize_xft_string(     "font", $delta);
+  my ($font_resized_bold)   = $self->_resize_xft_string( "boldFont", $delta);
+
+  # Update internal urxvt resource hash
+  #     This is necessary or else the next resize won't have an updated
+  #     value. "font" key is updated by urxvt when cmd_parse is called,
+  #     but boldFont is *not*, at least with the escape sequences I'm
+  #     emitting.
+  $self->{term}->resource("font",       $font_resized);
+  $self->{term}->resource("boldFont",   $font_resized_bold);
+
+  # Emit escape sequence to change fonts in rxvt runtime
+  $self->{term}->cmd_parse("\033]50;" . $font_resized . "\007");
+
+  # Persist the changes to xrdb
+  system("xrdb -load " . X_RESOURCES);
   open(XRDB_MERGE, "| xrdb -merge") || die "can't fork: $!";
   local $SIG{PIPE} = sub { die "xrdb pipe broke" };
-  print XRDB_MERGE $UPDATE_STR;                               # merge the new values
+  print XRDB_MERGE "urxvt\*font:        $font_resized\n"
+                 . "urxvt\*boldFont:    $font_resized_bold\n";
   close XRDB_MERGE || die "bad xrdb: $! $?";
-  system($SAVE_STR);                                          # write the db values back to the file
+  system("xrdb -edit " . X_RESOURCES);
 }
 
 sub on_user_command
@@ -60,5 +86,9 @@ sub on_user_command
   # function, if defined), and $cmd is the argument z.
   #
   my ($self, $cmd) = @_;
-  if ($cmd =~ /font:..crement/) { $self->change_size($cmd); }
+
+  if ($cmd =~ /font:(..crement)/)   # {in, de, ex}
+  {
+    $self->change_size(($1 eq "increment") ? +1 : -1);
+  }
 }
