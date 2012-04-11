@@ -25,7 +25,7 @@ use strict;
 #  Debugging:   urxvt --perl-lib ${HOME}/.urxvt -pe font 
 
 
-use constant X_RESOURCES => "~/.Xresources";
+use constant X_RESOURCES => "~/.config/xresources/fonts";
 
 sub _resize_xft_string
 {
