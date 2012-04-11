@@ -9,7 +9,7 @@ urxvt.perl-ext-common:              font
 
 Now, @Ctrl+Shift+<Up>@ and @Ctrl+Shift+<Down>@ will, respectively, enlarge and decrease the text size in a running urxvt window, *and* save the new font size to @~/.Xresources@, so that it's there for the next time you open a terminal window.  With the Monaco font, it's a poor man's iTerm.
 
-h2.
+h2. Modular font directives
 
 I keep my fonts in a separate xresources file, which gets include by @~/.Xresources@.  This way I can version @~/.Xdefaults@ without dirtying the repository every time I change the terminal font size.  For this to work, the path defined by @X_RESOURCES@ in @font@ must contain something like this:
 
