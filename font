@@ -66,7 +66,7 @@ sub change_size
   $self->{term}->resource("boldFont",   $font_resized_bold);
 
   # Emit escape sequence to change fonts in rxvt runtime
-  $self->{term}->cmd_parse("\033]50;" . $font_resized . "\007");
+  $self->{term}->cmd_parse("\e]710;" . $font_resized . "\007");
 
   # Persist the changes to xrdb
   system("xrdb -load " . X_RESOURCES);
