@@ -1,6 +1,8 @@
 #!/usr/bin/env perl
 
 use strict;
+use warnings;
+use List::Util qw(first);
 
 # On-the-fly urxvt font resizing.  Like ⌘{+,-}, on mac computers, just
 # way more complicated.
@@ -12,7 +14,15 @@ use strict;
 # 1) Emits escape sequences to change the font size in the running console;
 # 2) Persists the changed font size to xresources file.
 #
+# Note: For the time being, the Monaco font is treated as a special
+# case, due to Unicode compatibility issues.  Other fonts may need
+# special treatment, but I'm not using them.  In particular, Monaco only
+# supports unicode in certain pixel sizes.  9, 10, 12, 14 are embedded
+# bitmaps, which means (Except for 10) that they lack certain unicode
+# charmaps.
+#
 # Note: the regexes will only work on xft xrdb entries
+
 #   For this script to work, ~/.Xdefauls should probably contain at
 #   least the following:
 #
@@ -22,31 +32,72 @@ use strict;
 #
 # References: man 3 urxvtperl
 #
-#  Debugging:   urxvt --perl-lib ${HOME}/.urxvt -pe font 
+#  Debugging:   urxvt --perl-lib ${HOME}/.urxvt -pe font
 
 
 use constant X_RESOURCES => "~/.config/xresources/fonts";
 
+
 sub _resize_xft_string
 {
-  my ($self, $key, $delta)  = @_;
-  my (@pieces)              = split /:/, $self->{term}->resource($key);
-  my (@resized)             = ();
+  my ($self, $key, $delta)      = @_;
+  my (@pieces)                  = split /:/, $self->{term}->resource($key);
+  my (@resized)                 = ();
+  my ($monaco)                  = undef;
+
   foreach my $piece (@pieces)
-  { 
+  {
+    # Assumption: xft:fontname comes before pixelsize=whatever
+    $monaco ||= $piece =~ /Monaco/;
+
+    # matching string
     if ($piece =~ /pixelsize=(\d*)/)
     {
-      my ($size)        =  $1;
-      my ($new_size)    =  $size + $delta;
-      if ($new_size < 1)
+      my ($old_size)    =  $1;
+      my ($new_size)    =  $old_size;
+
+      # monaco font
+      if ($monaco)
       {
-        $new_size = 1;
+        my (@monaco_unicode_sizes)    = (8, 9, 10, 11, 13, 15, 16, 18, 21, 22, 28);
+        my ($monaco_default_size)     = &{ sub {  my @a = sort { $a <=> $b } @_;
+                                                  return ($a[$#a/2] + $a[@a/2]) / 2;}
+                                         }(@monaco_unicode_sizes); # median ...
+        my ($old_size_index) = first {
+          $monaco_unicode_sizes[$_] eq $old_size } 0..$#monaco_unicode_sizes;
+
+        # old font size is valid
+        if (defined($old_size_index))
+        {
+          # Do bounds checking:
+          #
+          # 1) avoid decrement of smallest font size index to a negative
+          # value --which would undesirably wrap around and set font to
+          # larger size
+          if ($old_size_index > 0 || $delta > 0)
+          {
+            my ($new_size_index)  = $old_size_index + $delta; # +1, equivalently
+            # 2) avoid increment of largest to non-existent larger
+            $new_size             = exists($monaco_unicode_sizes[$new_size_index])
+                                            ? $monaco_unicode_sizes[$new_size_index]
+                                            : $old_size;
+          }
+        }
+        else
+        {
+          # user had an invalid/non-unicode monaco size, reset to default
+          $new_size  = $monaco_default_size;
+        }
       }
-      $piece            =~ s/pixelsize=$size/pixelsize=$new_size/;
+      else
+      {
+        $new_size += $delta;
+      }
+      $piece =~ s/pixelsize=$old_size/pixelsize=$new_size/;
     }
     push @resized, $piece;
-  } 
-  join (":", @resized);
+  }
+  return join (":", @resized);
 }
 
 sub change_size
