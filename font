@@ -48,7 +48,7 @@ sub _resize_xft_string
   foreach my $piece (@pieces)
   {
     # Assumption: xft:fontname comes before pixelsize=whatever
-    $monaco ||= $piece =~ /Monaco/;
+    $monaco ||= $piece =~ /Monaco/i;
 
     # matching string
     if ($piece =~ /pixelsize=(\d*)/)
