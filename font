@@ -105,16 +105,22 @@ sub change_size
   my ($self, $delta) = @_;
 
   # Get xft strings with font size {+/-}1
-  my ($font_resized)        = $self->_resize_xft_string(     "font", $delta);
-  my ($font_resized_bold)   = $self->_resize_xft_string( "boldFont", $delta);
+  my ($font_resized)                = $self->_resize_xft_string(           "font", $delta);
+  my ($font_resized_im)             = $self->_resize_xft_string(         "imFont", $delta);
+  my ($font_resized_bold)           = $self->_resize_xft_string(       "boldFont", $delta);
+  my ($font_resized_italic)         = $self->_resize_xft_string(     "italicFont", $delta);
+  my ($font_resized_bold_italic)    = $self->_resize_xft_string( "boldItalicFont", $delta);
 
   # Update internal urxvt resource hash
   #     This is necessary or else the next resize won't have an updated
   #     value. "font" key is updated by urxvt when cmd_parse is called,
   #     but boldFont is *not*, at least with the escape sequences I'm
   #     emitting.
-  $self->{term}->resource("font",       $font_resized);
-  $self->{term}->resource("boldFont",   $font_resized_bold);
+  $self->{term}->resource(           "font", $font_resized);
+  $self->{term}->resource(         "imFont", $font_resized_im);
+  $self->{term}->resource(       "boldFont", $font_resized_bold);
+  $self->{term}->resource(     "italicFont", $font_resized_italic);
+  $self->{term}->resource( "boldItalicFont", $font_resized_bold_italic);
 
   # Emit escape sequence to change fonts in rxvt runtime
   $self->{term}->cmd_parse("\e]710;" . $font_resized . "\007");
@@ -123,8 +129,11 @@ sub change_size
   system("xrdb -load " . X_RESOURCES);
   open(XRDB_MERGE, "| xrdb -merge") || die "can't fork: $!";
   local $SIG{PIPE} = sub { die "xrdb pipe broke" };
-  print XRDB_MERGE "urxvt\*font:        $font_resized\n"
-                 . "urxvt\*boldFont:    $font_resized_bold\n";
+  print XRDB_MERGE "urxvt\*font:            $font_resized\n"
+                 . "urxvt\*imFont:          $font_resized_im\n"
+                 . "urxvt\*boldFont:        $font_resized_bold\n"
+                 . "urxvt\*italicFont:      $font_resized_italic\n"
+                 . "urxvt\*boldItalicFont:  $font_resized_bold_italic\n";
   close XRDB_MERGE || die "bad xrdb: $! $?";
   system("xrdb -edit " . X_RESOURCES);
 }
