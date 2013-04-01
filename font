@@ -59,7 +59,6 @@ sub _resize_xft_string
       # monaco font
       if ($monaco)
       {
-        print "yes";
         my (@monaco_unicode_sizes)    = (8, 9, 10, 11, 13, 15, 16, 18, 21, 22, 28);
         my ($monaco_default_size)     = &{ sub {  my @a = sort { $a <=> $b } @_;
                                                   return ($a[$#a/2] + $a[@a/2]) / 2;}
