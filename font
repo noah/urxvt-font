@@ -40,11 +40,16 @@ use constant X_RESOURCES => "~/.config/xresources/fonts";
 # Whether to restrict Monaco to using only point sizes that support
 # unicode.
 use constant UNICODE_ONLY => 0;
+use constant ENABLE_DPI_SCALING => 1;
+
+use constant FONT_PROPS => qw/font imFont boldFont italicFont boldItalicFont/;
+use constant STANDARD_DPI => 75;
+use constant MM_TO_INCH => 0.0393701;
 
 sub _resize_xft_string
 {
   my ($self, $key, $delta)      = @_;
-  my (@pieces)                  = split /:/, $self->{term}->resource($key);
+  my (@pieces)                  = split /:/, $self->{fonts}{$key};
   my (@resized)                 = ();
   my ($monaco)                  = undef;
 
@@ -106,40 +111,50 @@ sub _resize_xft_string
   return join (":", @resized);
 }
 
-sub change_size
+sub _scale_xft_string
 {
-  my ($self, $delta) = @_;
+  my ($self, $str) = @_;
 
-  # Get xft strings with font size {+/-}1
-  my ($font_resized)                = $self->_resize_xft_string(           "font", $delta);
-  my ($font_resized_im)             = $self->_resize_xft_string(         "imFont", $delta);
-  my ($font_resized_bold)           = $self->_resize_xft_string(       "boldFont", $delta);
-  my ($font_resized_italic)         = $self->_resize_xft_string(     "italicFont", $delta);
-  my ($font_resized_bold_italic)    = $self->_resize_xft_string( "boldItalicFont", $delta);
+  $str =~ s/pixelsize=(\d+)/"pixelsize=" . ($1 * $self->{dpi} \/ STANDARD_DPI)/eg;
+  return $str;
+}
+
+sub update_display
+{
+  my ($self) = @_;
 
   # Update internal urxvt resource hash
   #     This is necessary or else the next resize won't have an updated
   #     value. "font" key is updated by urxvt when cmd_parse is called,
   #     but boldFont is *not*, at least with the escape sequences I'm
   #     emitting.
-  $self->{term}->resource(           "font", $font_resized);
-  $self->{term}->resource(         "imFont", $font_resized_im);
-  $self->{term}->resource(       "boldFont", $font_resized_bold);
-  $self->{term}->resource(     "italicFont", $font_resized_italic);
-  $self->{term}->resource( "boldItalicFont", $font_resized_bold_italic);
+  foreach my $res (FONT_PROPS) {
+    $self->{term}->resource($res, $self->_scale_xft_string($self->{fonts}{$res}));
+  }
+
+  my $scaled = $self->{term}->resource("font");
+  $self->{term}->cmd_parse("\e]710;$scaled\007");
+}
+
+sub change_size
+{
+  my ($self, $delta) = @_;
+
+  # Update xft strings with font size {+/-}1
+  foreach (FONT_PROPS) {
+    $self->{fonts}{$_} = $self->_resize_xft_string($_, $delta);
+  }
 
   # Emit escape sequence to change fonts in rxvt runtime
-  $self->{term}->cmd_parse("\e]710;" . $font_resized . "\007");
+  $self->update_display;
 
   # Persist the changes to xrdb
   system("xrdb -load " . X_RESOURCES);
   open(XRDB_MERGE, "| xrdb -merge") || die "can't fork: $!";
   local $SIG{PIPE} = sub { die "xrdb pipe broke" };
-  print XRDB_MERGE "urxvt\*font:            $font_resized\n"
-                 . "urxvt\*imFont:          $font_resized_im\n"
-                 . "urxvt\*boldFont:        $font_resized_bold\n"
-                 . "urxvt\*italicFont:      $font_resized_italic\n"
-                 . "urxvt\*boldItalicFont:  $font_resized_bold_italic\n";
+  foreach (FONT_PROPS) {
+    print XRDB_MERGE "urxvt\*$_: $self->{fonts}{$_}\n"
+  }
   close XRDB_MERGE || die "bad xrdb: $! $?";
   system("xrdb -edit " . X_RESOURCES);
 }
@@ -157,4 +172,56 @@ sub on_user_command
   {
     $self->change_size(($1 eq "increment") ? +1 : -1);
   }
+}
+
+sub on_init
+{
+  my ($self) = @_;
+
+  ($self->{winx}, $self->{winy}) = (0, 0);
+
+  # Get current font settings
+  foreach (FONT_PROPS) {
+    $self->{fonts}{$_} = $self->{term}->resource($_);
+  }
+  $self->{dpi} = STANDARD_DPI;
+}
+
+sub get_dpi_at
+{
+  my ($px, $py) = @_;
+
+  foreach (grep {m/ connected /} `xrandr 2> /dev/null`) {
+    # Parse monitor dimensions from xrandr output, and skip if the given point
+    # is not on this monitor
+    my ($w, $h, $x, $y, $wmm, $hmm) = m/\b(\d+)x(\d+)([-+]\d+)([-+]\d+) .* (\d+)mm x (\d+)mm\b/;
+    next if $px < $x or $py < $y or $px >= $x + $w or $py >= $y + $h;
+
+    # Calculate DPI based on width alone for now:
+    #   screen width in pixels / screen width in inches
+    return $w / ($wmm * MM_TO_INCH);
+  }
+  return 0;
+}
+
+sub on_configure_notify
+{
+  my ($self, $event) = @_;
+  my $term = $self->{term};
+
+  return unless ENABLE_DPI_SCALING;
+
+  my ($newx, $newy) = $term->XTranslateCoordinates($term->vt, $term->DefaultRootWindow, 0, 0);
+  $newx += $event->{width}/2;
+  $newy += $event->{height}/2;
+
+  return if $newx == $self->{winx} and $newy == $self->{winy};
+
+  ($self->{winx}, $self->{winy}) = ($newx, $newy);
+  my $dpi = get_dpi_at($newx, $newy);
+  return if $dpi == 0 or $self->{dpi} == $dpi;
+  $self->{dpi} = $dpi;
+  $self->update_display;
+
+  $term->XMoveResizeWindow($term->vt, $event->{x}, $event->{y}, $event->{width}, $event->{height});
 }
