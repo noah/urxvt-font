@@ -194,8 +194,9 @@ sub get_dpi_at
   foreach (grep {m/ connected /} `xrandr 2> /dev/null`) {
     # Parse monitor dimensions from xrandr output, and skip if the given point
     # is not on this monitor
-    my ($w, $h, $x, $y, $wmm, $hmm) = m/\b(\d+)x(\d+)([-+]\d+)([-+]\d+) .* (\d+)mm x (\d+)mm\b/;
+    my ($w, $h, $x, $y, $rot, $wmm, $hmm) = m/\b(\d+)x(\d+)([-+]\d+)([-+]\d+) (\w*).* (\d+)mm x (\d+)mm\b/;
     next if $px < $x or $py < $y or $px >= $x + $w or $py >= $y + $h;
+    ($wmm, $hmm) = ($hmm, $wmm) if $rot eq "left" or $rot eq "right";
 
     # Calculate DPI based on width alone for now:
     #   screen width in pixels / screen width in inches
