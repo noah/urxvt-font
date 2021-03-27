@@ -195,6 +195,7 @@ sub get_dpi_at
     # Parse monitor dimensions from xrandr output, and skip if the given point
     # is not on this monitor
     my ($w, $h, $x, $y, $rot, $wmm, $hmm) = m/\b(\d+)x(\d+)([-+]\d+)([-+]\d+) (\w*).* (\d+)mm x (\d+)mm\b/;
+    return 0 if (! length ($x));
     next if $px < $x or $py < $y or $px >= $x + $w or $py >= $y + $h;
     ($wmm, $hmm) = ($hmm, $wmm) if $rot eq "left" or $rot eq "right";
 
